@@ -11,10 +11,10 @@
 | `FRONTEND_URL` | CORS 允許的前端 URL | 選填 | `http://localhost:5173` |
 | `ADMIN_EMAIL` | 種子管理員帳號 Email | 選填 | `admin@hexschool.com` |
 | `ADMIN_PASSWORD` | 種子管理員密碼 | 選填 | `12345678` |
-| `ECPAY_MERCHANT_ID` | 綠界金流商店代號（未實作） | 選填 | `3002607` |
-| `ECPAY_HASH_KEY` | 綠界金流 Hash Key（未實作） | 選填 | `pwFHCqoQZGmho4w6` |
-| `ECPAY_HASH_IV` | 綠界金流 Hash IV（未實作） | 選填 | `EkRm7iFT261dpevs` |
-| `ECPAY_ENV` | 綠界環境（staging/production）（未實作） | 選填 | `staging` |
+| `ECPAY_MERCHANT_ID` | 綠界金流商店代號 | **必填**（金流功能） | `3002607`（測試） |
+| `ECPAY_HASH_KEY` | 綠界金流 Hash Key | **必填**（金流功能） | `pwFHCqoQZGmho4w6`（測試） |
+| `ECPAY_HASH_IV` | 綠界金流 Hash IV | **必填**（金流功能） | `EkRm7iFT261dpevs`（測試） |
+| `ECPAY_ENV` | 綠界環境（`staging` 或 `production`） | 選填 | `staging` |
 
 **重要**：`NODE_ENV=test` 時，bcrypt salt rounds 降為 1（加速測試）；生產環境為 10。
 

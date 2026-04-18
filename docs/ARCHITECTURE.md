@@ -22,13 +22,16 @@ project-root/
 │   │   ├── adminMiddleware.js   # RBAC：確認 req.user.role === 'admin'
 │   │   ├── sessionMiddleware.js # 從 X-Session-Id header 注入 req.sessionId
 │   │   └── errorHandler.js     # 全域錯誤處理；隱藏內部錯誤訊息
+│   ├── services/
+│   │   └── ecpayService.js      # 綠界 ECPay 工具：CheckMacValue、AIO 表單組建、QueryTradeInfo
 │   └── routes/
 │       ├── authRoutes.js        # POST /api/auth/register|login, GET /api/auth/profile
 │       ├── productRoutes.js     # GET /api/products（公開列表與詳情）
 │       ├── adminProductRoutes.js # CRUD /api/admin/products（管理員）
 │       ├── cartRoutes.js        # CRUD /api/cart（雙模式：JWT 或 session）
-│       ├── orderRoutes.js       # /api/orders（建立、查看、模擬付款）
+│       ├── orderRoutes.js       # /api/orders（建立、查看）
 │       ├── adminOrderRoutes.js  # GET /api/admin/orders（管理員查看）
+│       ├── paymentRoutes.js     # 綠界付款啟動、OrderResultURL、ReturnURL 備用
 │       └── pageRoutes.js        # 伺服器渲染頁面路由（EJS）
 │
 ├── views/
@@ -40,6 +43,7 @@ project-root/
 │   │   ├── product-detail.ejs   # 商品詳情
 │   │   ├── cart.ejs             # 購物車
 │   │   ├── checkout.ejs         # 結帳
+│   │   ├── payment-redirect.ejs # 自動送出表單至綠界（無版型）
 │   │   ├── login.ejs            # 登入/註冊
 │   │   ├── orders.ejs           # 訂單列表
 │   │   ├── order-detail.ejs     # 訂單詳情
@@ -68,7 +72,7 @@ project-root/
 │   │       ├── index.js         # 首頁：商品列表、分頁、加入購物車
 │   │       ├── product-detail.js
 │   │       ├── cart.js
-│   │       ├── checkout.js      # 結帳：驗證收件資訊、送出訂單
+│   │       ├── checkout.js      # 結帳：驗證收件資訊、送出訂單、跳轉綠界付款
 │   │       ├── login.js
 │   │       ├── orders.js
 │   │       ├── order-detail.js
@@ -184,7 +188,14 @@ Request
 | POST | /api/orders | JWT | 從購物車建立訂單 |
 | GET | /api/orders | JWT | 使用者訂單列表 |
 | GET | /api/orders/:id | JWT | 訂單詳情 |
-| PATCH | /api/orders/:id/pay | JWT | 模擬付款（success/fail） |
+
+### 付款（綠界 ECPay）
+
+| 方法 | 路徑 | 認證 | 說明 |
+|------|------|------|------|
+| GET | /payment/ecpay/start/:orderId | 無（依 orderId 存取） | 建立 AIO 表單並自動跳轉綠界 |
+| POST | /payment/ecpay/result | 無（CheckMacValue 驗證） | OrderResultURL：驗證並更新訂單狀態 |
+| POST | /api/payment/notify | 無（CheckMacValue 驗證） | ReturnURL 備用（本地無法接收） |
 
 ### 管理員訂單（/api/admin/orders）
 
@@ -334,6 +345,11 @@ Request
 | total_amount | INTEGER | NOT NULL | 訂單總金額（分） |
 | status | TEXT | NOT NULL DEFAULT 'pending', CHECK IN ('pending','paid','failed') | 狀態 |
 | created_at | TEXT | NOT NULL DEFAULT datetime('now') | - |
+| ecpay_trade_no | TEXT | - | 綠界交易編號（付款成功後填入） |
+| payment_type | TEXT | - | 付款方式（如 `Credit_CreditCard`） |
+| paid_at | TEXT | - | 付款時間（台灣時間，格式 `yyyy/MM/dd HH:mm:ss`） |
+
+> `ecpay_trade_no`、`payment_type`、`paid_at` 三個欄位由資料庫 migration 在伺服器啟動時以冪等方式新增，舊資料不受影響。
 
 ### order_items 表
 
@@ -376,12 +392,21 @@ Request
        ├─ UPDATE products SET stock = stock - quantity（扣庫存）
        └─ DELETE cart_items（清空購物車）
 
-模擬付款
+綠界付款流程
   │
-  ├─ PATCH /api/orders/:id/pay { action: 'success' | 'fail' }
-  ├─ 確認訂單屬於當前使用者
-  ├─ 確認訂單狀態為 'pending'
-  └─ UPDATE orders SET status = 'paid' | 'failed'
+  ├─ GET /payment/ecpay/start/:orderId
+  │    ├─ 查詢訂單（需 status = 'pending'）
+  │    ├─ buildAioParams()：組合 AIO 表單參數 + generateCheckMacValue()
+  │    └─ render payment-redirect.ejs → 瀏覽器自動 POST 至綠界付款頁
+  │
+  ├─ （使用者在綠界完成付款）
+  │
+  └─ POST /payment/ecpay/result（OrderResultURL，瀏覽器 redirect）
+       ├─ verifyCheckMacValue()（timing-safe，失敗則 redirect 回訂單列表）
+       ├─ queryTradeInfo(merchantTradeNo)（主動查詢確認 TradeStatus）
+       ├─ TradeStatus='1' → UPDATE orders SET status='paid', ecpay_trade_no, payment_type, paid_at
+       ├─ 其他 → UPDATE orders SET status='failed'
+       └─ redirect /orders/:id?payment=success|fail
 ```
 
 ---
@@ -392,13 +417,17 @@ Request
 
 | 整合 | 使用方式 |
 |------|---------|
-| JWT（jsonwebtoken） | POST /api/auth/login|register 回傳 token |
+| JWT（jsonwebtoken） | POST /api/auth/login\|register 回傳 token |
 | bcrypt | 使用者密碼雜湊與驗證 |
 | swagger-jsdoc | 從 JSDoc 產生 openapi.json |
+| 綠界 ECPay AIO | `src/services/ecpayService.js`：CheckMacValue（SHA256）、AIO 表單建立、QueryTradeInfo 主動查詢 |
 
-### 佔位整合（未實作）
+**綠界整合技術說明**：
 
-**綠界金流（ECPay）**：環境變數 `ECPAY_MERCHANT_ID`、`ECPAY_HASH_KEY`、`ECPAY_HASH_IV`、`ECPAY_ENV` 已設定但無對應程式碼。現以 `/api/orders/:id/pay` 模擬金流回呼。
+- 使用 Node.js 內建 `crypto`（SHA256）與 `fetch`（HTTP 請求），無需額外套件
+- CheckMacValue 計算採用 AIO 協議的 `ecpayUrlEncode`（`encodeURIComponent` + `%20→+` + `~→%7e` + lowercase + .NET 字元還原），與 AES 協議不同，不可混用
+- 本地開發採 OrderResultURL（瀏覽器 redirect）替代 ReturnURL（Server-to-Server），再以 QueryTradeInfo 二次確認，解決 localhost 無法接收 ECPay 通知的限制
+- `ECPAY_ENV=staging` 對應測試環境；改為 `production` 自動切換正式端點與帳號
 
 ---
 

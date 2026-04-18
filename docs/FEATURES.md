@@ -10,10 +10,10 @@
 | 購物車（已登入） | ✅ 完成 | JWT Bearer 模式 |
 | 結帳與訂單建立 | ✅ 完成 | 含庫存扣減 Transaction |
 | 訂單查詢 | ✅ 完成 | 列表 + 詳情 |
-| 模擬付款 | ✅ 完成 | success/fail 狀態切換 |
+| 綠界 ECPay AIO 金流 | ✅ 完成 | 本地端主動 QueryTradeInfo 驗證 |
 | 後台商品管理 | ✅ 完成 | CRUD + 商品刪除保護 |
 | 後台訂單管理 | ✅ 完成 | 查看 + 狀態篩選（僅讀） |
-| 綠界金流整合 | ❌ 未實作 | 環境變數佔位，無程式碼 |
+| 模擬付款 | ❌ 已移除 | 由綠界金流取代 |
 | 訪客購物車合併 | ❌ 未實作 | 登入後不自動合併 |
 | 訂單取消/退款 | ❌ 未實作 | 無對應 API |
 
@@ -181,14 +181,6 @@
 
 回傳單一訂單完整資訊，含 order_items 列表。確認訂單屬於當前使用者，否則回傳 404（不洩漏其他人的訂單存在）。
 
-**模擬付款（PATCH /api/orders/:id/pay）**
-
-接受 `action: 'success' | 'fail'`。只有 status 為 'pending' 的訂單可操作：
-- `action: 'success'` → status 改為 `'paid'`
-- `action: 'fail'` → status 改為 `'failed'`
-
-已付款或已失敗的訂單再次呼叫回傳 400 INVALID_STATUS。
-
 ### 端點規格
 
 | 端點 | 認證 | Body | 成功回應 |
@@ -196,16 +188,17 @@
 | POST /api/orders | JWT | recipientName, recipientEmail, recipientAddress | 201: 訂單詳情（含 items） |
 | GET /api/orders | JWT | - | 200: 訂單列表 |
 | GET /api/orders/:id | JWT | - | 200: 訂單詳情（含 items） |
-| PATCH /api/orders/:id/pay | JWT | action: 'success'\|'fail' | 200: 更新後訂單 |
 
 ### 訂單狀態機
 
-```
-pending  →  paid    (action: 'success')
-         →  failed  (action: 'fail')
+訂單狀態由綠界金流 QueryTradeInfo 驗證結果決定，不再支援前端手動切換：
 
-paid     →  （不可轉換，回傳 400）
-failed   →  （不可轉換，回傳 400）
+```
+pending  →  paid    （QueryTradeInfo TradeStatus='1'）
+         →  failed  （QueryTradeInfo TradeStatus 非 '1'）
+
+paid     →  （終態，不再變更）
+failed   →  （終態，不再變更）
 ```
 
 ### 錯誤情境
@@ -218,6 +211,74 @@ failed   →  （不可轉換，回傳 400）
 | 訂單不存在或不屬於當前使用者 | 404 | NOT_FOUND |
 | 訂單狀態非 pending | 400 | INVALID_STATUS |
 | 無認證 | 401 | UNAUTHORIZED |
+
+---
+
+---
+
+## 綠界 ECPay AIO 金流
+
+**檔案**：`src/services/ecpayService.js`、`src/routes/paymentRoutes.js`
+
+### 行為描述
+
+本專案使用綠界全方位金流（AIO）作為收款方式。由於僅部署於本地端，無法接收綠界伺服器端的 ReturnURL 非同步通知，因此採用「瀏覽器回轉 OrderResultURL + 主動查詢 QueryTradeInfo」的架構驗證付款結果。
+
+**啟動付款（GET /payment/ecpay/start/:orderId）**
+
+確認訂單存在且狀態為 `'pending'`，計算 AIO 表單所需的所有參數（包含 CheckMacValue），渲染 `payment-redirect.ejs`（無版型的獨立 HTML），以 JavaScript 自動送出 POST 表單至綠界測試環境（`payment-stage.ecpay.com.tw`）。若訂單狀態不是 pending，直接 redirect 回訂單詳情頁。
+
+關鍵 AIO 參數：
+- `MerchantTradeNo`：由 `order_no` 去除連字號組成（例 `ORD20241115ABCDE`，16 字元 ≤ 20 上限）
+- `TotalAmount`：訂單 `total_amount`（整數，台幣）
+- `ItemName`：所有商品「商品名稱 x 數量」以 `#` 串接，自動截斷至 390 字元避免 CheckMacValue 計算錯誤
+- `ReturnURL`：`BASE_URL/api/payment/notify`（本地無法接收，保留備用）
+- `OrderResultURL`：`BASE_URL/payment/ecpay/result`（瀏覽器跳轉，本地可接收）
+- `CustomField1`：訂單 `id`（UUID），用於 OrderResultURL 時識別訂單
+
+**接收付款結果（POST /payment/ecpay/result）**
+
+即 OrderResultURL。綠界完成付款後，將瀏覽器以 form POST 導向此端點。處理流程：
+1. 以 timing-safe 比較驗證 ECPay CheckMacValue，驗證失敗則靜默導向訂單列表
+2. 主動呼叫 `QueryTradeInfo` API 向綠界確認付款狀態（防止 OrderResultURL 偽造）
+3. `TradeStatus === '1'` → 更新訂單 `status = 'paid'`，並儲存 `ecpay_trade_no`、`payment_type`、`paid_at`
+4. 其他 → 更新訂單 `status = 'failed'`
+5. Redirect 至 `/orders/:id?payment=success|fail`
+6. 若 QueryTradeInfo 呼叫失敗（網路逾時等），回退至 OrderResultURL body 中的 `RtnCode` 判斷
+
+**ReturnURL 備用端點（POST /api/payment/notify）**
+
+本地開發時綠界無法呼叫此端點，但保留完整實作供日後部署至公開環境使用。驗證 CheckMacValue 後依 `RtnCode === '1'` 更新訂單狀態，回應純文字 `1|OK`（HTTP 200）。
+
+**CheckMacValue 計算（ecpayService.js）**
+
+依綠界 AIO SHA256 協議：
+1. 過濾掉 `CheckMacValue` 欄位
+2. 依 key 名稱小寫字母序排列
+3. 拼接為 `HashKey=...&k1=v1&...&HashIV=...`
+4. ECPay 特殊 URL encode（`encodeURIComponent` + `%20→+` + `~→%7e` + lowercase + .NET 字元還原）
+5. SHA256 雜湊並轉大寫
+
+驗證時使用 `crypto.timingSafeEqual` 防止 timing attack。
+
+**QueryTradeInfo**
+
+向 `payment-stage.ecpay.com.tw/Cashier/QueryTradeInfo/V5` 發送 POST（form-urlencoded），帶 `MerchantID`、`MerchantTradeNo`、`TimeStamp`（Unix 秒數）。回應為 URL-encoded 字串，解析後需驗證 `CheckMacValue`，再讀取 `TradeStatus` 欄位（`'1'` 為付款成功）。
+
+### 路由規格
+
+| 方法 | 路徑 | 說明 |
+|------|------|------|
+| GET | /payment/ecpay/start/:orderId | 建立 AIO 表單並自動跳轉綠界 |
+| POST | /payment/ecpay/result | OrderResultURL：驗證並更新訂單狀態 |
+| POST | /api/payment/notify | ReturnURL 備用（本地無法接收） |
+
+### 測試方式（staging 環境）
+
+- 信用卡號：`4311-9522-2222-2222`
+- 安全碼：任意三碼（例 `222`）
+- 有效期：任意未來月份
+- 3D Secure 驗證碼：`1234`
 
 ---
 
@@ -311,7 +372,7 @@ failed   →  （不可轉換，回傳 400）
 - 頁面載入時確認已登入（否則導向 `/login`）
 - 載入購物車商品與總金額
 - 表單驗證：收件人姓名、Email 格式、地址均必填
-- 提交後呼叫 `POST /api/orders`，成功後導向 `/orders/:id`
+- 提交後呼叫 `POST /api/orders`，成功後導向 `/payment/ecpay/start/:id` 進行綠界付款
 
 ### 後台商品管理（public/js/pages/admin-products.js）
 
