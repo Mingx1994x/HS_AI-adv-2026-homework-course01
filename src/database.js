@@ -68,6 +68,14 @@ function initializeDatabase() {
     );
   `);
 
+  // ECPay 欄位 migration（idempotent）
+  const orderCols = db.pragma('table_info(orders)').map(c => c.name);
+  if (!orderCols.includes('ecpay_trade_no')) {
+    db.exec('ALTER TABLE orders ADD COLUMN ecpay_trade_no TEXT');
+    db.exec('ALTER TABLE orders ADD COLUMN payment_type TEXT');
+    db.exec('ALTER TABLE orders ADD COLUMN paid_at TEXT');
+  }
+
   // Seed data
   seedAdminUser();
   seedProducts();
