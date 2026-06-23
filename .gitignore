@@ -36,5 +36,11 @@ coverage/
 *.tmp
 *.swp
 
+# AI
 .claude/*.local.json
+.claude/skills/
+.agents/skills/
 public/css/output.css
+
+# Design Tool
+docs/design/
