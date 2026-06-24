@@ -12,6 +12,14 @@
   --color-text-primary: #2C2A28;
   --color-text-secondary: #6B6560;
   --color-text-muted: #9A948E;
+
+  --color-bh-red: #d33023;
+  --color-bh-blue: #2253a8;
+  --color-bh-yellow: #f4c027;
+  --color-bh-black: #111111;
+  --color-bh-white: #f7f3ea;
+  --font-display: 'Noto Sans TC', sans-serif;
+  --font-numeral: 'Space Grotesk', sans-serif;
 }
 
 body {
