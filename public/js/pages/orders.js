@@ -8,9 +8,9 @@ createApp({
     const loading = ref(true);
 
     const statusMap = {
-      pending: { label: '待付款', cls: 'bg-apricot/20 text-apricot' },
-      paid: { label: '已付款', cls: 'bg-sage/20 text-sage' },
-      failed: { label: '付款失敗', cls: 'bg-red-100 text-red-600' },
+      pending: { label: '待付款', dot: 'bg-bh-yellow' },
+      paid: { label: '已付款', dot: 'bg-bh-blue' },
+      failed: { label: '付款失敗', dot: 'bg-bh-red' },
     };
 
     onMounted(async function () {
