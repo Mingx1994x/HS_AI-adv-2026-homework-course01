@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Edit(~/.npm/**)",
-      "Read(~/.npm/**)"
+      "Read(~/.npm/**)",
+      "mcp__playwright__browser_navigate"
     ],
     "deny": [
       "Bash(rm -rf *)",
