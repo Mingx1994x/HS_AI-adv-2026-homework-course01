@@ -42,8 +42,5 @@ coverage/
 .agents/skills/
 public/css/output.css
 
-# Design Tool
-docs/design/
-
 # Playwright MCP output
 .playwright-mcp/
