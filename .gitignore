@@ -36,5 +36,10 @@ coverage/
 *.tmp
 *.swp
 
+# AI
 .claude/*.local.json
+.agents/skills/
 public/css/output.css
+
+# Playwright MCP output
+.playwright-mcp/

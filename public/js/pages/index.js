@@ -30,6 +30,16 @@ createApp({
       }
     }
 
+    const tileStyles = [
+      { bg: 'bg-bh-red', text: 'text-bh-white', bud: 'bg-bh-white', button: 'bg-bh-white text-bh-black hover:bg-bh-black hover:text-bh-white' },
+      { bg: 'bg-bh-blue', text: 'text-bh-white', bud: 'bg-bh-white', button: 'bg-bh-white text-bh-black hover:bg-bh-black hover:text-bh-white' },
+      { bg: 'bg-bh-yellow', text: 'text-bh-black', bud: 'bg-bh-red', button: 'bg-bh-red text-bh-white hover:bg-bh-black' },
+      { bg: 'bg-bh-white border-2 border-bh-black', text: 'text-bh-black', bud: 'bg-bh-red', button: 'bg-bh-red text-bh-white hover:bg-bh-black' },
+    ];
+    function tileStyle(idx) {
+      return tileStyles[idx % tileStyles.length];
+    }
+
     function goToProduct(id) {
       window.location.href = '/products/' + id;
     }
@@ -63,7 +73,7 @@ createApp({
 
     return {
       products, pagination, loading, featuredImages,
-      loadProducts, goToProduct, addToCart
+      loadProducts, goToProduct, addToCart, tileStyle
     };
   }
 }).mount('#app');
