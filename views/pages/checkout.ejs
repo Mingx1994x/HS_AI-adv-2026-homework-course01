@@ -42,6 +42,38 @@
             :class="{ 'border-bh-red': errors.recipientAddress }"
           />
           <p v-if="errors.recipientAddress" class="text-bh-red text-xs mt-1">{{ errors.recipientAddress }}</p>
+          <p v-if="isRemoteArea" class="text-bh-red text-xs mt-1">系統偵測您的收件地址為偏遠地區，運費將加收 NT$ 200</p>
+        </div>
+        <div>
+          <label class="block text-xs font-bold tracking-widest uppercase mb-2">配送方式</label>
+          <div class="flex gap-3">
+            <label
+              class="flex-1 flex items-center justify-between border-2 px-4 py-3 text-sm cursor-pointer transition-colors"
+              :class="form.shippingMethod === 'home' ? 'border-bh-red bg-bh-red/5' : 'border-bh-black'"
+            >
+              <span class="flex items-center gap-2">
+                <input type="radio" value="home" v-model="form.shippingMethod" class="accent-bh-red" />
+                宅配到府
+              </span>
+              <span class="font-numeral text-xs text-bh-black/60">NT$ 120</span>
+            </label>
+            <label
+              class="flex-1 flex items-center justify-between border-2 px-4 py-3 text-sm cursor-pointer transition-colors"
+              :class="form.shippingMethod === 'store' ? 'border-bh-red bg-bh-red/5' : 'border-bh-black'"
+            >
+              <span class="flex items-center gap-2">
+                <input type="radio" value="store" v-model="form.shippingMethod" class="accent-bh-red" />
+                超商取貨
+              </span>
+              <span class="font-numeral text-xs text-bh-black/60">NT$ 60</span>
+            </label>
+          </div>
+        </div>
+        <div>
+          <label class="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" v-model="form.isExpress" class="accent-bh-red w-4 h-4" />
+            <span>急件加購（當日配送，加收 NT$ 250）</span>
+          </label>
         </div>
       </div>
     </div>
@@ -64,13 +96,13 @@
           </div>
           <div class="flex justify-between">
             <span>運費</span>
-            <span class="font-numeral">{{ cartTotal >= 500 ? '免運' : 'NT$ 150' }}</span>
+            <span class="font-numeral">{{ shippingFee === 0 ? '免運' : ('NT$ ' + shippingFee.toLocaleString()) }}</span>
           </div>
         </div>
         <div class="flex justify-between items-center pt-2">
           <span class="font-bold text-lg">總計</span>
           <span class="inline-block bg-bh-white text-bh-red font-numeral font-black text-xl px-3.5 py-1.5">
-            NT$ {{ (cartTotal + (cartTotal >= 500 ? 0 : 150)).toLocaleString() }}
+            NT$ {{ grandTotal.toLocaleString() }}
           </span>
         </div>
         <button

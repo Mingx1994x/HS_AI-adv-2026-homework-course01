@@ -1,4 +1,4 @@
-const { createApp, ref, computed, onMounted } = Vue;
+const { createApp, ref, computed, watch, onMounted } = Vue;
 
 createApp({
   setup() {
@@ -7,14 +7,55 @@ createApp({
     const loading = ref(true);
     const submitting = ref(false);
     const cartItems = ref([]);
-    const form = ref({ recipientName: '', recipientEmail: '', recipientAddress: '' });
+    const form = ref({
+      recipientName: '',
+      recipientEmail: '',
+      recipientAddress: '',
+      shippingMethod: 'home',
+      isExpress: false
+    });
     const errors = ref({});
+    const shippingFee = ref(0);
+    const isRemoteArea = ref(false);
 
     const cartTotal = computed(function () {
       return cartItems.value.reduce(function (sum, item) {
         return sum + item.product.price * item.quantity;
       }, 0);
     });
+
+    const grandTotal = computed(function () {
+      return cartTotal.value + shippingFee.value;
+    });
+
+    let quoteTimer = null;
+    async function fetchShippingQuote() {
+      try {
+        const params = new URLSearchParams({
+          method: form.value.shippingMethod,
+          isExpress: form.value.isExpress ? 'true' : 'false',
+          address: form.value.recipientAddress || ''
+        });
+        const res = await apiFetch('/api/cart?' + params.toString());
+        shippingFee.value = res.data.shipping_fee;
+        isRemoteArea.value = res.data.is_remote_area;
+      } catch (e) {
+        // 試算失敗時保留前一次的運費估算，不打斷結帳流程
+      }
+    }
+
+    function scheduleShippingQuote(immediate) {
+      clearTimeout(quoteTimer);
+      if (immediate) {
+        fetchShippingQuote();
+        return;
+      }
+      quoteTimer = setTimeout(fetchShippingQuote, 400);
+    }
+
+    watch(function () { return form.value.shippingMethod; }, function () { scheduleShippingQuote(true); });
+    watch(function () { return form.value.isExpress; }, function () { scheduleShippingQuote(true); });
+    watch(function () { return form.value.recipientAddress; }, function () { scheduleShippingQuote(false); });
 
     function validate() {
       errors.value = {};
@@ -53,6 +94,8 @@ createApp({
           window.location.href = '/cart';
           return;
         }
+        shippingFee.value = res.data.shipping_fee;
+        isRemoteArea.value = res.data.is_remote_area;
       } catch (e) {
         window.location.href = '/cart';
         return;
@@ -60,6 +103,10 @@ createApp({
       loading.value = false;
     });
 
-    return { loading, submitting, cartItems, form, errors, cartTotal, submitOrder };
+    return {
+      loading, submitting, cartItems, form, errors,
+      cartTotal, shippingFee, grandTotal, isRemoteArea,
+      submitOrder
+    };
   }
 }).mount('#app');

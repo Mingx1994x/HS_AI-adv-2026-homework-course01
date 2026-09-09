@@ -6,6 +6,9 @@ createApp({
     const loading = ref(true);
     const confirmVisible = ref(false);
     const deleteItemId = ref('');
+    const shippingFee = ref(0);
+    const grandTotal = ref(0);
+    const freeShippingThreshold = ref(1500);
 
     const total = computed(function () {
       return items.value.reduce(function (sum, item) {
@@ -13,11 +16,18 @@ createApp({
       }, 0);
     });
 
+    async function refreshCart() {
+      const res = await apiFetch('/api/cart');
+      items.value = res.data.items;
+      shippingFee.value = res.data.shipping_fee;
+      grandTotal.value = res.data.grand_total;
+      freeShippingThreshold.value = res.data.free_shipping_threshold;
+    }
+
     async function loadCart() {
       loading.value = true;
       try {
-        const res = await apiFetch('/api/cart');
-        items.value = res.data.items;
+        await refreshCart();
       } catch (e) {
         Notification.show('載入購物車失敗', 'error');
       } finally {
@@ -32,8 +42,7 @@ createApp({
           method: 'PATCH',
           body: JSON.stringify({ quantity: qty })
         });
-        var item = items.value.find(function (i) { return i.id === itemId; });
-        if (item) item.quantity = qty;
+        await refreshCart();
       } catch (e) {
         Notification.show('更新數量失敗', 'error');
       }
@@ -48,7 +57,7 @@ createApp({
       confirmVisible.value = false;
       try {
         await apiFetch('/api/cart/' + deleteItemId.value, { method: 'DELETE' });
-        items.value = items.value.filter(function (i) { return i.id !== deleteItemId.value; });
+        await refreshCart();
         Notification.show('已從購物車移除', 'success');
       } catch (e) {
         Notification.show('移除失敗', 'error');
@@ -69,6 +78,7 @@ createApp({
 
     return {
       items, loading, total, confirmVisible,
+      shippingFee, grandTotal, freeShippingThreshold,
       updateQuantity, confirmDelete, handleDelete, goCheckout
     };
   }

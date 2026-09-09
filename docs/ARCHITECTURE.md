@@ -17,6 +17,8 @@ project-root/
 │
 ├── src/
 │   ├── database.js              # DB 初始化、schema 建立、種子資料
+│   ├── utils/
+│   │   └── shipping.js          # 運費計算：純函式模組，不依賴 DB，可獨立單元測試
 │   ├── middleware/
 │   │   ├── authMiddleware.js    # JWT Bearer Token 驗證；解碼後注入 req.user
 │   │   ├── adminMiddleware.js   # RBAC：確認 req.user.role === 'admin'
@@ -176,7 +178,7 @@ Request
 
 | 方法 | 路徑 | 認證 | 說明 |
 |------|------|------|------|
-| GET | /api/cart | JWT 或 Session | 查看購物車 |
+| GET | /api/cart | JWT 或 Session | 查看購物車（可帶 `method`/`isExpress`/`address` query 試算運費） |
 | POST | /api/cart | JWT 或 Session | 加入購物車 |
 | PATCH | /api/cart/:itemId | JWT 或 Session | 更新商品數量 |
 | DELETE | /api/cart/:itemId | JWT 或 Session | 移除商品 |
@@ -185,7 +187,7 @@ Request
 
 | 方法 | 路徑 | 認證 | 說明 |
 |------|------|------|------|
-| POST | /api/orders | JWT | 從購物車建立訂單 |
+| POST | /api/orders | JWT | 從購物車建立訂單（含運費計算，`shippingMethod`/`isExpress` 選填，偏遠地區依 `recipientAddress` 自動判斷） |
 | GET | /api/orders | JWT | 使用者訂單列表 |
 | GET | /api/orders/:id | JWT | 訂單詳情 |
 
@@ -342,14 +344,15 @@ Request
 | recipient_name | TEXT | NOT NULL | 收件人姓名 |
 | recipient_email | TEXT | NOT NULL | 收件人 Email |
 | recipient_address | TEXT | NOT NULL | 收件地址 |
-| total_amount | INTEGER | NOT NULL | 訂單總金額（分） |
+| total_amount | INTEGER | NOT NULL | 訂單總金額（商品小計 + 運費，分） |
+| shipping_fee | INTEGER | NOT NULL DEFAULT 0 | 運費（依 `src/utils/shipping.js` 計算） |
 | status | TEXT | NOT NULL DEFAULT 'pending', CHECK IN ('pending','paid','failed') | 狀態 |
 | created_at | TEXT | NOT NULL DEFAULT datetime('now') | - |
 | ecpay_trade_no | TEXT | - | 綠界交易編號（付款成功後填入） |
 | payment_type | TEXT | - | 付款方式（如 `Credit_CreditCard`） |
 | paid_at | TEXT | - | 付款時間（台灣時間，格式 `yyyy/MM/dd HH:mm:ss`） |
 
-> `ecpay_trade_no`、`payment_type`、`paid_at` 三個欄位由資料庫 migration 在伺服器啟動時以冪等方式新增，舊資料不受影響。
+> `ecpay_trade_no`、`payment_type`、`paid_at`、`shipping_fee` 欄位均由資料庫 migration 在伺服器啟動時以冪等方式新增，舊資料不受影響。
 
 ### order_items 表
 
@@ -381,13 +384,15 @@ Request
 
 使用者結帳
   │
-  ├─ POST /api/orders { recipientName, recipientEmail, recipientAddress }
+  ├─ POST /api/orders { recipientName, recipientEmail, recipientAddress, shippingMethod?, isExpress? }
   ├─ authMiddleware（需登入）
   ├─ 查詢使用者所有 cart_items JOIN products
   ├─ 驗證購物車非空 + 所有商品庫存足夠
+  ├─ 計算商品小計 → isRemoteAddress(recipientAddress) 自動判斷偏遠地區
+  ├─ calculateShippingFee(subtotal, { method, isRemoteArea, isExpress })（src/utils/shipping.js）
   │
   └─ db.transaction()（原子操作）
-       ├─ INSERT orders（status: 'pending'）
+       ├─ INSERT orders（status: 'pending', total_amount = 小計 + 運費, shipping_fee）
        ├─ INSERT order_items（快照每個商品名稱與價格）
        ├─ UPDATE products SET stock = stock - quantity（扣庫存）
        └─ DELETE cart_items（清空購物車）
