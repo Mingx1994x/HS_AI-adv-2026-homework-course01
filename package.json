@@ -9,7 +9,8 @@
     "css:build": "npx @tailwindcss/cli -i public/css/input.css -o public/css/output.css --minify",
     "openapi": "node generate-openapi.js",
     "test": "vitest run",
-    "test:unit": "vitest run test/"
+    "test:unit": "vitest run test/",
+    "test:integration": "vitest run --config vitest.integration.config.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
