@@ -2,6 +2,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const jwt = require('jsonwebtoken');
 const db = require('../database');
+const { calculateShippingFee, isRemoteAddress, FREE_BASE_FEE_THRESHOLD, DELIVERY_METHODS } = require('../utils/shipping');
 
 const router = express.Router();
 
@@ -61,6 +62,25 @@ function getOwnerCondition(req) {
  *     security:
  *       - bearerAuth: []
  *       - sessionId: []
+ *     parameters:
+ *       - in: query
+ *         name: method
+ *         schema:
+ *           type: string
+ *           enum: [home, store]
+ *           default: home
+ *         description: 用來試算運費的配送方式
+ *       - in: query
+ *         name: isExpress
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: 用來試算運費的當日急件加購
+ *       - in: query
+ *         name: address
+ *         schema:
+ *           type: string
+ *         description: 用來試算運費的收件地址，會依此自動判斷是否為偏遠地區
  *     responses:
  *       200:
  *         description: 成功
@@ -96,6 +116,14 @@ function getOwnerCondition(req) {
  *                                 type: string
  *                     total:
  *                       type: integer
+ *                     shipping_fee:
+ *                       type: integer
+ *                     is_remote_area:
+ *                       type: boolean
+ *                     free_shipping_threshold:
+ *                       type: integer
+ *                     grand_total:
+ *                       type: integer
  *                 error:
  *                   type: string
  *                   nullable: true
@@ -127,8 +155,24 @@ router.get('/', dualAuth, (req, res) => {
 
   const total = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
 
+  const { method, isExpress, address } = req.query;
+  const resolvedMethod = Object.prototype.hasOwnProperty.call(DELIVERY_METHODS, method) ? method : 'home';
+  const isRemoteArea = isRemoteAddress(address);
+  const shippingFee = calculateShippingFee(total, {
+    method: resolvedMethod,
+    isRemoteArea,
+    isExpress: isExpress === 'true' || isExpress === '1'
+  });
+
   res.json({
-    data: { items, total },
+    data: {
+      items,
+      total,
+      shipping_fee: shippingFee,
+      is_remote_area: isRemoteArea,
+      free_shipping_threshold: FREE_BASE_FEE_THRESHOLD,
+      grand_total: total + shippingFee
+    },
     error: null,
     message: '成功'
   });

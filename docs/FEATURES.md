@@ -9,6 +9,7 @@
 | 購物車（訪客） | ✅ 完成 | Session ID 雙模式支援 |
 | 購物車（已登入） | ✅ 完成 | JWT Bearer 模式 |
 | 結帳與訂單建立 | ✅ 完成 | 含庫存扣減 Transaction |
+| 運費計算 | ✅ 完成 | 配送方式/滿額免運/偏遠地區/急件，`src/utils/shipping.js` |
 | 訂單查詢 | ✅ 完成 | 列表 + 詳情 |
 | 綠界 ECPay AIO 金流 | ✅ 完成 | 本地端主動 QueryTradeInfo 驗證 |
 | 後台商品管理 | ✅ 完成 | CRUD + 商品刪除保護 |
@@ -119,7 +120,9 @@
 
 **查看購物車（GET /api/cart）**
 
-回傳購物車商品列表，每項包含商品詳情（名稱、價格、圖片）與數量。同時回傳 `total`（總金額 = 各商品 price × quantity 加總）。
+回傳購物車商品列表，每項包含商品詳情（名稱、價格、圖片）與數量。同時回傳 `total`（商品小計 = 各商品 price × quantity 加總）。
+
+可額外帶 query 參數 `method`（`home`/`store`，預設 `home`）、`isExpress`（`true`/`false`）、`address`（用於自動判斷偏遠地區）試算運費，回應會多帶 `shipping_fee`、`is_remote_area`、`free_shipping_threshold`、`grand_total`（= `total + shipping_fee`）。結帳頁即是用這組 query 參數即時試算運費（詳見「運費計算」章節）。
 
 **更新數量（PATCH /api/cart/:itemId）**
 
@@ -133,7 +136,7 @@
 
 | 端點 | 認證 | Body / 查詢 | 成功回應 |
 |------|------|------------|---------|
-| GET /api/cart | JWT 或 Session | - | 200: { items[], total } |
+| GET /api/cart | JWT 或 Session | method, isExpress, address（皆選填，用於運費試算） | 200: { items[], total, shipping_fee, is_remote_area, free_shipping_threshold, grand_total } |
 | POST /api/cart | JWT 或 Session | productId, quantity | 200: { id, product_id, quantity } |
 | PATCH /api/cart/:itemId | JWT 或 Session | quantity | 200: 更新後的 item |
 | DELETE /api/cart/:itemId | JWT 或 Session | - | 200: 成功訊息 |
@@ -157,21 +160,24 @@
 
 **建立訂單（POST /api/orders）**
 
-需 JWT 認證（訪客不可下訂）。接受收件人資訊（name、email、address）。
+需 JWT 認證（訪客不可下訂）。接受收件人資訊（name、email、address），以及選填的 `shippingMethod`（`home`/`store`，預設 `home`）、`isExpress`（預設 `false`）。
 
 建立流程：
-1. 驗證三個收件人欄位均非空
+1. 驗證三個收件人欄位均非空、`shippingMethod` 合法
 2. 查詢使用者購物車（需非空）
 3. 驗證所有商品庫存充足
-4. 計算總金額（各商品 price × quantity 加總）
-5. **原子交易**（`db.transaction()`）：
-   - 建立 orders 記錄（status: 'pending'）
+4. 計算商品小計（各商品 price × quantity 加總）
+5. 依 `recipientAddress` 自動判斷是否為偏遠地區（`isRemoteAddress()`），呼叫 `calculateShippingFee()` 算出運費，`total_amount = 小計 + 運費`
+6. **原子交易**（`db.transaction()`）：
+   - 建立 orders 記錄（status: 'pending', shipping_fee, total_amount）
    - 建立 order_items（快照商品名稱與價格）
    - 扣減每個商品的 stock
    - 清空使用者購物車
-6. 回傳訂單詳情（含商品列表）
+7. 回傳訂單詳情（含 `subtotal`、`shipping_fee`、`is_remote_area`、`total_amount`、商品列表）
 
 訂單號格式：`ORD-YYYYMMDD-XXXXX`（XXXXX 為 UUID 前 5 字元）
+
+運費計算規則詳見下方「運費計算」章節。
 
 **訂單列表（GET /api/orders）**
 
@@ -185,7 +191,7 @@
 
 | 端點 | 認證 | Body | 成功回應 |
 |------|------|------|---------|
-| POST /api/orders | JWT | recipientName, recipientEmail, recipientAddress | 201: 訂單詳情（含 items） |
+| POST /api/orders | JWT | recipientName, recipientEmail, recipientAddress, shippingMethod?, isExpress? | 201: 訂單詳情（含 subtotal, shipping_fee, is_remote_area, items） |
 | GET /api/orders | JWT | - | 200: 訂單列表 |
 | GET /api/orders/:id | JWT | - | 200: 訂單詳情（含 items） |
 
@@ -211,6 +217,44 @@ failed   →  （終態，不再變更）
 | 訂單不存在或不屬於當前使用者 | 404 | NOT_FOUND |
 | 訂單狀態非 pending | 400 | INVALID_STATUS |
 | 無認證 | 401 | UNAUTHORIZED |
+
+---
+
+## 運費計算
+
+**檔案**：`src/utils/shipping.js`（純函式模組，不依賴資料庫，可獨立單元測試）；整合於 `src/routes/orderRoutes.js`、`src/routes/cartRoutes.js`
+
+### 行為描述
+
+運費規則（金額單位與商品 `price` 一致）：
+
+| 條件 | 費用 |
+|------|------|
+| 宅配基本運費（`method: 'home'`） | NT$ 120 |
+| 超商取貨基本運費（`method: 'store'`） | NT$ 60 |
+| 商品小計滿 NT$ 1,500 | 免基本運費（偏遠地區、急件加收不受影響） |
+| 偏遠地區 | 加收 NT$ 200 |
+| 當日急件 | 加收 NT$ 250 |
+
+**核心函式**
+
+- `calculateShippingFee(subtotal, { method, isRemoteArea, isExpress })`：回傳運費金額。`method` 非 `home`/`store` 或 `subtotal` 為負數會拋出例外。
+- `calculateOrderTotal(subtotal, options)`：回傳 `subtotal + calculateShippingFee(subtotal, options)`。
+- `isRemoteAddress(address)`：依 `REMOTE_AREA_KEYWORDS`（花蓮、台東、澎湖、金門、連江/馬祖、綠島、蘭嶼、小琉球等關鍵字）比對地址字串，回傳是否為偏遠地區。
+
+**偏遠地區判斷**：不需前端手動勾選，後端依 `recipientAddress`（下單時）或 `address` query 參數（購物車試算時）自動判斷。
+
+**整合點**：
+- `POST /api/orders`：`shippingMethod`、`isExpress` 由前端傳入，`isRemoteArea` 由後端依地址自動算出；運費與小計一併存入 `orders.shipping_fee`、`orders.total_amount`。
+- `GET /api/cart`：`method`、`isExpress`、`address` 皆為選填 query 參數，用於購物車頁／結帳頁即時試算運費，不影響購物車本身資料。
+
+### 錯誤情境
+
+| 情境 | 狀態碼 | error |
+|------|--------|-------|
+| `shippingMethod` 非 `home`/`store` | 400 | VALIDATION_ERROR |
+
+`GET /api/cart` 的運費試算參數為寬鬆處理：`method` 不合法時直接 fallback 為 `home`，不會回傳錯誤（僅影響試算結果，不影響購物車資料本身）。
 
 ---
 
@@ -367,12 +411,21 @@ failed   →  （終態，不再變更）
 - 加入成功後更新導覽列購物車數量徽章（`header-init.js`）
 - 使用 Vue 3 `createApp()` 管理商品列表狀態
 
+### 購物車頁（public/js/pages/cart.js）
+
+- 頁面載入呼叫 `GET /api/cart`（不帶運費試算參數，等同宅配基本運費估算），取得 `shipping_fee`、`grand_total`、`free_shipping_threshold`
+- 免運提示 banner 依 `free_shipping_threshold` 動態顯示「再買 NT$X 即可享免基本運費」
+- 數量增減、刪除商品後重新呼叫 `GET /api/cart`，讓運費/總計同步更新
+- 摘要區提示「實際運費將依配送方式與收件地址於結帳頁計算」（購物車頁未收集地址，僅為估算值）
+
 ### 結帳頁（public/js/pages/checkout.js）
 
 - 頁面載入時確認已登入（否則導向 `/login`）
-- 載入購物車商品與總金額
+- 載入購物車商品與總金額，並以初次 `GET /api/cart` 結果帶入初始運費估算
+- 提供「配送方式」單選（宅配到府 / 超商取貨）與「急件加購」勾選，表單另含 `shippingMethod`、`isExpress`
+- 切換配送方式/急件時立即、輸入地址時 debounce 400ms 後，呼叫 `GET /api/cart?method=&isExpress=&address=` 即時試算運費；偵測到偏遠地區會顯示提示文字
 - 表單驗證：收件人姓名、Email 格式、地址均必填
-- 提交後呼叫 `POST /api/orders`，成功後導向 `/payment/ecpay/start/:id` 進行綠界付款
+- 提交後呼叫 `POST /api/orders`（連同 `shippingMethod`、`isExpress`），成功後導向 `/payment/ecpay/start/:id` 進行綠界付款
 
 ### 後台商品管理（public/js/pages/admin-products.js）
 

@@ -14,8 +14,8 @@
 
   <template v-else>
     <!-- Free shipping banner -->
-    <div v-if="total < 500" class="bg-bh-yellow p-3 mb-6 text-xs font-bold tracking-widest uppercase text-center text-bh-black">
-      再買 NT$ {{ (500 - total).toLocaleString() }} 即可享免運優惠
+    <div v-if="total < freeShippingThreshold" class="bg-bh-yellow p-3 mb-6 text-xs font-bold tracking-widest uppercase text-center text-bh-black">
+      再買 NT$ {{ (freeShippingThreshold - total).toLocaleString() }} 即可享免基本運費
     </div>
     <div v-else class="bg-bh-blue p-3 mb-6 text-xs font-bold tracking-widest uppercase text-center text-bh-white">
       已達免運門檻！
@@ -83,14 +83,15 @@
         </div>
         <div class="flex justify-between items-center text-sm">
           <span>運費</span>
-          <span class="font-numeral">{{ total >= 500 ? '免運' : 'NT$ 150' }}</span>
+          <span class="font-numeral">{{ shippingFee === 0 ? '免運' : ('NT$ ' + shippingFee.toLocaleString()) }}</span>
         </div>
         <div class="flex justify-between items-center pt-2">
           <span class="font-bold text-lg">總計</span>
           <span class="font-numeral font-black text-2xl text-bh-red">
-            NT$ {{ (total + (total >= 500 ? 0 : 150)).toLocaleString() }}
+            NT$ {{ grandTotal.toLocaleString() }}
           </span>
         </div>
+        <p class="text-bh-white/60 text-xs">＊實際運費將依配送方式與收件地址於結帳頁計算，此為宅配基本運費估算值</p>
         <button
           @click="goCheckout"
           class="w-full mt-2 bg-bh-red text-bh-white py-3 text-xs font-bold tracking-widest uppercase hover:bg-bh-white hover:text-bh-black transition-colors"

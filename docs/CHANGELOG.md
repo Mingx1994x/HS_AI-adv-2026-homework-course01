@@ -6,9 +6,22 @@
 
 ## [未發布]
 
+### 新增
+- **運費計算功能**：`src/utils/shipping.js`，純函式模組（`calculateShippingFee`、`calculateOrderTotal`、`isRemoteAddress`），不依賴資料庫，可獨立單元測試
+  - 規則：宅配基本運費 NT$120／超商取貨 NT$60，商品小計滿 NT$1,500 免基本運費，偏遠地區加收 NT$200，當日急件加收 NT$250
+  - 偏遠地區依收件地址關鍵字（花蓮、台東、澎湖、金門、連江/馬祖、綠島、蘭嶼、小琉球等）自動判斷，無需手動勾選
+- `POST /api/orders` 新增選填欄位 `shippingMethod`（`home`/`store`）、`isExpress`；回應新增 `subtotal`、`shipping_fee`、`is_remote_area`；`total_amount` 改為商品小計 + 運費
+- `GET /api/cart` 新增選填 query 參數 `method`、`isExpress`、`address`，用於前端即時試算運費；回應新增 `shipping_fee`、`is_remote_area`、`free_shipping_threshold`、`grand_total`
+- orders 資料表新增 `shipping_fee` 欄位（冪等 `ALTER TABLE` migration，不影響既有資料）
+- 結帳頁新增「配送方式」（宅配/超商取貨）與「急件加購」選項，切換時即時試算運費並顯示偏遠地區提示；購物車頁運費/總計改由 API 即時計算，取代原本前端寫死的門檻邏輯
+
+### 變更
+- 首頁「滿額免運」與商品詳情頁「購買須知」的免運門檻文案，由過往寫死的 NT$500 修正為實際規則的 NT$1,500
+
 ### 待實作
 - 訪客購物車登入後自動合併
 - 訂單取消 / 退款功能
+- 運費功能的自動化測試（目前僅手動驗證）
 
 ---
 

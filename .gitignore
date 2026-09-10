@@ -43,3 +43,10 @@ public/css/output.css
 
 # Playwright MCP output
 .playwright-mcp/
+
+# Playwright test output
+test-results/
+playwright-report/
+
+# Postman collection/environment（npm run postman 可從 openapi.json 100% 重現，不需進版控）
+postman/

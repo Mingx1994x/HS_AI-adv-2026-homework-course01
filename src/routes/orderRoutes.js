@@ -2,6 +2,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../database');
 const authMiddleware = require('../middleware/authMiddleware');
+const { calculateShippingFee, isRemoteAddress } = require('../utils/shipping');
 
 const router = express.Router();
 
@@ -37,6 +38,16 @@ function generateOrderNo() {
  *                 format: email
  *               recipientAddress:
  *                 type: string
+ *                 description: 是否為偏遠地區將依此地址自動判斷（加收 200 元），無需另外傳入
+ *               shippingMethod:
+ *                 type: string
+ *                 enum: [home, store]
+ *                 default: home
+ *                 description: 宅配（home）或超商取貨（store）
+ *               isExpress:
+ *                 type: boolean
+ *                 default: false
+ *                 description: 是否為當日急件（加收 250 元）
  *     responses:
  *       201:
  *         description: 訂單建立成功
@@ -52,6 +63,12 @@ function generateOrderNo() {
  *                       type: string
  *                     order_no:
  *                       type: string
+ *                     subtotal:
+ *                       type: integer
+ *                     shipping_fee:
+ *                       type: integer
+ *                     is_remote_area:
+ *                       type: boolean
  *                     total_amount:
  *                       type: integer
  *                     status:
@@ -78,7 +95,13 @@ function generateOrderNo() {
  *         description: 購物車為空或庫存不足或收件資訊缺失
  */
 router.post('/', (req, res) => {
-  const { recipientName, recipientEmail, recipientAddress } = req.body;
+  const {
+    recipientName,
+    recipientEmail,
+    recipientAddress,
+    shippingMethod = 'home',
+    isExpress = false
+  } = req.body;
   const userId = req.user.userId;
 
   if (!recipientName || !recipientEmail || !recipientAddress) {
@@ -95,6 +118,14 @@ router.post('/', (req, res) => {
       data: null,
       error: 'VALIDATION_ERROR',
       message: 'Email 格式不正確'
+    });
+  }
+
+  if (!['home', 'store'].includes(shippingMethod)) {
+    return res.status(400).json({
+      data: null,
+      error: 'VALIDATION_ERROR',
+      message: 'shippingMethod 必須為 home 或 store'
     });
   }
 
@@ -126,10 +157,17 @@ router.post('/', (req, res) => {
     });
   }
 
-  // Calculate total
-  const totalAmount = cartItems.reduce(
+  // Calculate subtotal, shipping fee and grand total
+  const subtotal = cartItems.reduce(
     (sum, item) => sum + item.product_price * item.quantity, 0
   );
+  const isRemoteArea = isRemoteAddress(recipientAddress);
+  const shippingFee = calculateShippingFee(subtotal, {
+    method: shippingMethod,
+    isRemoteArea,
+    isExpress: Boolean(isExpress)
+  });
+  const totalAmount = subtotal + shippingFee;
 
   const orderId = uuidv4();
   const orderNo = generateOrderNo();
@@ -137,9 +175,9 @@ router.post('/', (req, res) => {
   // Transaction: create order, order items, deduct stock, clear cart
   const createOrder = db.transaction(() => {
     db.prepare(
-      `INSERT INTO orders (id, order_no, user_id, recipient_name, recipient_email, recipient_address, total_amount)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).run(orderId, orderNo, userId, recipientName, recipientEmail, recipientAddress, totalAmount);
+      `INSERT INTO orders (id, order_no, user_id, recipient_name, recipient_email, recipient_address, total_amount, shipping_fee)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(orderId, orderNo, userId, recipientName, recipientEmail, recipientAddress, totalAmount, shippingFee);
 
     const insertItem = db.prepare(
       `INSERT INTO order_items (id, order_id, product_id, product_name, product_price, quantity)
@@ -167,6 +205,9 @@ router.post('/', (req, res) => {
     data: {
       id: order.id,
       order_no: order.order_no,
+      subtotal,
+      shipping_fee: order.shipping_fee,
+      is_remote_area: isRemoteArea,
       total_amount: order.total_amount,
       status: order.status,
       items: orderItems,

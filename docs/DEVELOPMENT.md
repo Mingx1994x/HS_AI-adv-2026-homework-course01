@@ -133,7 +133,7 @@ const Auth = { getToken() {...}, setToken() {...} };
    app.use('/api', yourRoutes);
    ```
 
-5. **撰寫測試**（`tests/your.test.js`），並更新 `vitest.config.js` 的 `sequence.setupFiles`
+5. **撰寫測試**（`test/unit/api/your.test.js`），並更新 `config/vitest.config.js` 的 `sequence.files`
 
 ---
 

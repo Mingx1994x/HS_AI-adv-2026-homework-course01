@@ -3,7 +3,7 @@ const path = require('path');
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 
-const dbPath = path.join(__dirname, '..', 'database.sqlite');
+const dbPath = process.env.DATABASE_PATH || path.join(__dirname, '..', 'database.sqlite');
 const db = new Database(dbPath);
 
 // Enable WAL mode for better performance
@@ -51,6 +51,7 @@ function initializeDatabase() {
       recipient_email TEXT NOT NULL,
       recipient_address TEXT NOT NULL,
       total_amount INTEGER NOT NULL,
+      shipping_fee INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'paid', 'failed')),
 
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -74,6 +75,9 @@ function initializeDatabase() {
     db.exec('ALTER TABLE orders ADD COLUMN ecpay_trade_no TEXT');
     db.exec('ALTER TABLE orders ADD COLUMN payment_type TEXT');
     db.exec('ALTER TABLE orders ADD COLUMN paid_at TEXT');
+  }
+  if (!orderCols.includes('shipping_fee')) {
+    db.exec('ALTER TABLE orders ADD COLUMN shipping_fee INTEGER NOT NULL DEFAULT 0');
   }
 
   // Seed data
