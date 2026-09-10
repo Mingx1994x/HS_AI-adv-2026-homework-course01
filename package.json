@@ -9,7 +9,7 @@
     "css:build": "npx @tailwindcss/cli -i public/css/input.css -o public/css/output.css --minify",
     "openapi": "node generate-openapi.js",
     "test": "vitest run --config config/vitest.config.js",
-    "test:unit": "vitest run --config config/vitest.config.js test/unit",
+    "test:unit": "vitest run --config config/vitest.shipping.config.js",
     "test:integration": "vitest run --config config/vitest.integration.config.js",
     "test:e2e": "playwright test --config config/playwright.config.js"
   },

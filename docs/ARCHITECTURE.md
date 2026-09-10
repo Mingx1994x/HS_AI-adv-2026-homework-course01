@@ -15,7 +15,8 @@ project-root/
 │
 ├── config/
 │   ├── swagger.config.js        # OpenAPI 3.0 設定（安全機制、伺服器 URL）
-│   ├── vitest.config.js         # 單元測試設定（循序、固定順序）
+│   ├── vitest.config.js         # API 測試設定（test/unit/api/**，循序、固定順序；npm test）
+│   ├── vitest.shipping.config.js  # 單元測試設定（僅 test/unit/shipping/**，純函式；npm run test:unit）
 │   ├── vitest.integration.config.js  # 整合測試設定（獨立 :memory: DB）
 │   └── playwright.config.js     # E2E 測試設定（testDir/outputDir 以絕對路徑釘回專案根目錄）
 │
@@ -86,15 +87,17 @@ project-root/
 │   │       └── admin-orders.js
 │
 └── test/
-    ├── unit/                    # npm test / npm run test:unit（真實 database.sqlite）
-    │   ├── setup.js             # 測試輔助：getAdminToken()、registerUser()
-    │   ├── auth.test.js
-    │   ├── products.test.js
-    │   ├── cart.test.js
-    │   ├── orders.test.js
-    │   ├── adminProducts.test.js
-    │   ├── adminOrders.test.js
-    │   └── shipping.test.js     # 純函式測試，不碰資料庫
+    ├── unit/
+    │   ├── api/                 # npm test（真實 database.sqlite；專案原有測試）
+    │   │   ├── setup.js         # 測試輔助：getAdminToken()、registerUser()
+    │   │   ├── auth.test.js
+    │   │   ├── products.test.js
+    │   │   ├── cart.test.js
+    │   │   ├── orders.test.js
+    │   │   ├── adminProducts.test.js
+    │   │   └── adminOrders.test.js
+    │   └── shipping/            # npm run test:unit（純函式，不碰資料庫；後續才新增）
+    │       └── shipping.test.js
     ├── integration/             # npm run test:integration（獨立 :memory: DB）
     │   ├── setup.js
     │   └── checkout.test.js

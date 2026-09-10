@@ -1,20 +1,20 @@
 import { defineConfig } from 'vitest/config';
 
+// 專案原有的 API 測試（test/unit/api/**，2026-04-07 init commit 就存在），是 npm test 的預設對象。
+// 這些測試打真實的 app + database.sqlite，且互有資料依賴（見 sequence.files 的順序），不可平行執行。
 export default defineConfig({
   test: {
     globals: true,
     fileParallelism: false,
-    // 只掃 test/unit/**：test/integration/** 有自己的 vitest.integration.config.js（獨立 :memory: DB），
-    // test/e2e/** 是 Playwright（npm run test:e2e）的測試，都不該被這份預設設定（npm test）掃到
-    include: ['test/unit/**/*.test.js'],
+    include: ['test/unit/api/**/*.test.js'],
     sequence: {
       files: [
-        'test/unit/auth.test.js',
-        'test/unit/products.test.js',
-        'test/unit/cart.test.js',
-        'test/unit/orders.test.js',
-        'test/unit/adminProducts.test.js',
-        'test/unit/adminOrders.test.js',
+        'test/unit/api/auth.test.js',
+        'test/unit/api/products.test.js',
+        'test/unit/api/cart.test.js',
+        'test/unit/api/orders.test.js',
+        'test/unit/api/adminProducts.test.js',
+        'test/unit/api/adminOrders.test.js',
       ],
     },
     hookTimeout: 10000,

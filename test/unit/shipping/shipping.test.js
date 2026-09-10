@@ -6,7 +6,7 @@ const {
   FREE_BASE_FEE_THRESHOLD,
   REMOTE_AREA_SURCHARGE,
   EXPRESS_SURCHARGE
-} = require('../../src/utils/shipping');
+} = require('../../../src/utils/shipping');
 
 describe('shipping utils - calculateShippingFee', () => {
   it('宅配基本運費：小計未達免運門檻時收取 120 元', () => {

@@ -16,7 +16,8 @@ npm run dev:server  # 只啟動伺服器（不重建 CSS）
 npm run dev:css     # 監聽並即時編譯 Tailwind CSS
 npm run css:build   # 一次性建置並壓縮 CSS
 npm run openapi     # 從 JSDoc 產生 openapi.json
-npm test            # 執行 test/unit/**（循序，非互動）
+npm test            # 執行 test/unit/api/**（真實 DB，循序，非互動；專案原有測試）
+npm run test:unit   # 執行 test/unit/shipping/**（純函式，後續才新增）
 npm run test:integration  # 執行 test/integration/**（獨立 :memory: DB）
 npm run test:e2e    # 執行 test/e2e/**（Playwright，需先自行啟動 http://localhost:3001）
 ```
@@ -26,7 +27,7 @@ npm run test:e2e    # 執行 test/e2e/**（Playwright，需先自行啟動 http:
 - **價格以分（cents）整數儲存**：資料庫與 API 回應的 `price`、`total_amount` 均為整數（1680 = NT$1680，因設計上 1 unit = 1 cent）
 - **訂單商品為快照**：`order_items` 儲存下單當時的 `product_name`、`product_price`，不依賴 `products` 外鍵，商品刪改不影響歷史訂單
 - **購物車雙模式**：訪客用 `X-Session-Id`，登入用 JWT Bearer；系統不自動合併兩者購物車
-- **測試分三層**：`test/unit/`（真實 DB，循序，順序為 auth → products → cart → orders → adminProducts → adminOrders）、`test/integration/`（獨立 `:memory:` DB）、`test/e2e/`（Playwright，串接綠界測試環境）；三者互不共用資料庫狀態，詳見 [docs/TESTING.md](./docs/TESTING.md)
+- **測試分四層**：`test/unit/api/`（真實 DB，循序，`npm test`，順序為 auth → products → cart → orders → adminProducts → adminOrders；專案原有測試）、`test/unit/shipping/`（純函式，`npm run test:unit`，後續才新增）、`test/integration/`（獨立 `:memory:` DB）、`test/e2e/`（Playwright，串接綠界測試環境）；四者互不共用資料庫狀態，詳見 [docs/TESTING.md](./docs/TESTING.md)
 - **伺服器啟動前需 JWT_SECRET**：`server.js` 啟動時驗證，缺少會拋錯終止；請先確認 `.env` 存在
 - 功能開發使用 `docs/plans/` 記錄計畫；完成後移至 `docs/plans/archive/`
 
