@@ -43,3 +43,7 @@ public/css/output.css
 
 # Playwright MCP output
 .playwright-mcp/
+
+# Playwright test output
+test-results/
+playwright-report/

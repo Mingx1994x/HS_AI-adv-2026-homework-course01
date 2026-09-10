@@ -8,12 +8,16 @@ project-root/
 ├── app.js                       # Express 應用程式設定（middleware、路由掛載）
 ├── server.js                    # 伺服器入口點（驗證 JWT_SECRET、監聽 port）
 ├── generate-openapi.js          # 從 JSDoc 產生 openapi.json
-├── swagger-config.js            # OpenAPI 3.0 設定（安全機制、伺服器 URL）
-├── vitest.config.js             # 測試設定（循序、固定順序）
 ├── package.json                 # 依賴與 npm scripts
 ├── database.sqlite              # SQLite 資料庫主檔案（WAL 模式）
 ├── .env                         # 環境變數（不納入版控）
 ├── .env.example                 # 環境變數範本
+│
+├── config/
+│   ├── swagger.config.js        # OpenAPI 3.0 設定（安全機制、伺服器 URL）
+│   ├── vitest.config.js         # 單元測試設定（循序、固定順序）
+│   ├── vitest.integration.config.js  # 整合測試設定（獨立 :memory: DB）
+│   └── playwright.config.js     # E2E 測試設定（testDir/outputDir 以絕對路徑釘回專案根目錄）
 │
 ├── src/
 │   ├── database.js              # DB 初始化、schema 建立、種子資料
@@ -81,14 +85,21 @@ project-root/
 │   │       ├── admin-products.js # 後台商品 CRUD（Modal 介面）
 │   │       └── admin-orders.js
 │
-└── tests/
-    ├── setup.js                 # 測試輔助：getAdminToken()、registerUser()
-    ├── auth.test.js
-    ├── products.test.js
-    ├── cart.test.js
-    ├── orders.test.js
-    ├── adminProducts.test.js
-    └── adminOrders.test.js
+└── test/
+    ├── unit/                    # npm test / npm run test:unit（真實 database.sqlite）
+    │   ├── setup.js             # 測試輔助：getAdminToken()、registerUser()
+    │   ├── auth.test.js
+    │   ├── products.test.js
+    │   ├── cart.test.js
+    │   ├── orders.test.js
+    │   ├── adminProducts.test.js
+    │   ├── adminOrders.test.js
+    │   └── shipping.test.js     # 純函式測試，不碰資料庫
+    ├── integration/             # npm run test:integration（獨立 :memory: DB）
+    │   ├── setup.js
+    │   └── checkout.test.js
+    └── e2e/                     # npm run test:e2e（Playwright，需先啟動專案）
+        └── checkout-payment.spec.js
 ```
 
 ---
