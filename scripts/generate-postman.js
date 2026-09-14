@@ -1,5 +1,5 @@
 const fs = require('fs');
-const spec = require('./openapi.json');
+const spec = require('../openapi.json');
 
 // 固定寫死（而非每次 crypto.randomUUID()），讓 npm run postman 在規格沒變動時
 // 重複執行會產生一模一樣的輸出，不會每次都跑出無意義的 diff

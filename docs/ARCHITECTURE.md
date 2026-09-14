@@ -7,11 +7,14 @@ project-root/
 ├── CLAUDE.md                    # Claude Code 專案快速參考
 ├── app.js                       # Express 應用程式設定（middleware、路由掛載）
 ├── server.js                    # 伺服器入口點（驗證 JWT_SECRET、監聽 port）
-├── generate-openapi.js          # 從 JSDoc 產生 openapi.json
 ├── package.json                 # 依賴與 npm scripts
 ├── database.sqlite              # SQLite 資料庫主檔案（WAL 模式）
 ├── .env                         # 環境變數（不納入版控）
 ├── .env.example                 # 環境變數範本
+│
+├── scripts/
+│   ├── generate-openapi.js      # 從 JSDoc 產生 openapi.json（npm run openapi）
+│   └── generate-postman.js      # 從 openapi.json 產生 Postman Collection/Environment（npm run postman）
 │
 ├── config/
 │   ├── swagger.config.js        # OpenAPI 3.0 設定（安全機制、伺服器 URL）
